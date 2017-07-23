@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNet.SignalR;
+using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,24 +13,28 @@ namespace SignalrTest.App_Code
         private static readonly ConcurrentDictionary<string, string> _clients = new ConcurrentDictionary<string, string>();
         protected override Task OnConnected(IRequest request, string connectionId)
         {
-            Cookie userNameCookie;
-            if (request.Cookies.TryGetValue("user", out userNameCookie) &&
-                userNameCookie != null)
-            {
-                _clients[connectionId] = userNameCookie.Value;
-                _users[userNameCookie.Value] = connectionId;
-            }
-
-            string clientIp = GetClientIP(request);
-
-            string user = GetUser(connectionId);
-
             return Connection.Send(connectionId, "Welcome!");
         }
 
         protected override Task OnReceived(IRequest request, string connectionId, string data)
         {
-            return Connection.Send(connectionId, data);
+            var message = JsonConvert.DeserializeObject<Message>(data);
+
+            switch (message.Type)
+            {
+                case MessageType.Set:
+                    Connection.Broadcast(new
+                    {
+                        type = MessageType.Set.ToString(),
+                        from = GetUser(connectionId),
+                        data = message.Value
+                    });
+                    break;
+                default:
+                    break;
+            }
+
+            return base.OnReceived(request, connectionId, data);
         }
 
         protected override Task OnDisconnected(IRequest request, string connectionId, bool stopCalled)
@@ -45,10 +50,14 @@ namespace SignalrTest.App_Code
         }
 
         /// <summary>
-        /// 通过connectionId获取用户名
+        /// 连接类型
         /// </summary>
-        /// <param name="connectionId"></param>
-        /// <returns></returns>
+        enum MessageType
+        {
+            SetName,
+            Set,
+            Guess
+        }
         private string GetUser(string connectionId)
         {
             string user;
@@ -59,11 +68,6 @@ namespace SignalrTest.App_Code
             return user;
         }
 
-        /// <summary>
-        /// 通过user获取connectionId
-        /// </summary>
-        /// <param name="user"></param>
-        /// <returns></returns>
         private string GetClient(string user)
         {
             string connectionId;
@@ -72,21 +76,6 @@ namespace SignalrTest.App_Code
                 return connectionId;
             }
             return null;
-        }
-
-        /// <summary>
-        /// 连接类型
-        /// </summary>
-        enum MessageType
-        {
-            Send,
-            Broadcast,
-            Join,
-            PrivateMessage,
-            AddToGroup,
-            RemoveFromGroup,
-            SendToGroup,
-            BroadcastExceptMe,
         }
         class Message
         {

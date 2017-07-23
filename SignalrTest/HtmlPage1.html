@@ -6,8 +6,52 @@
     <meta charset="utf-8" />
 </head>
 <body>
-    <script src="Scripts/jquery-3.1.1.min.js"></script>
+    <style type="text/css">
+        #pad {
+            border: 2px solid #808080;
+        }
+    </style>
+
+    <div style="padding:20px;display: none" id="connected1">
+        这是:
+        <input id="set" />
+        <button id="setButton">设置</button>
+        &nbsp;
+        我猜：
+        <input id="guess" />
+        <button id="guessButton">猜</button>
+    </div>
+    <div style="padding:20px">
+        <div id="connecting" class="text-info">
+            等待链接……
+        </div>
+        <div id="connected" style="display: none">
+            <canvas width="700" height="400" id="pad">
+                <p class="text-error">Unsupported brower</p>
+            </canvas>
+        </div>
+    </div>
+
+    <script>
+        $(function () {
+            $("#setButton").click(function () {
+
+            });
+        });
+
+        $(function () {
+            $("#guessButton").click(function () {
+
+            });
+        });
+    </script>
+
+    <script src="Scripts/jquery-1.8.3.min.js"></script>
+    <script src="Scripts/jquery.cookie.js"></script>
     <script src="Scripts/jquery.signalR-2.2.2.min.js"></script>
+    <script src="Scripts/jcanvas.js"></script>
+    <script src="Scripts/drawingpad.js"></script>
+    <script src="signalr/js"></script>
     <script type="text/javascript">
         var conn = $.connection("/my-connection");
 
@@ -19,6 +63,53 @@
         //接受服务器的推送
         conn.received(function (data) {
             console.log("server返回的数据： " + data);
+        });
+        conn.received(function (data) {
+            $("<li/>").html(window.JSON.stringify(data)).appendTo($("#messages"));
+            if (data.type == 2) {
+                $.cookie('user', data.data);
+            }
+        });
+    </script>
+
+    <script>
+        $(function () {
+            function getQueryVariable(variable) {
+                var query = window.location.search.substring(1),
+                    vars = query.split("&"),
+                    pair;
+                for (var i = 0; i < vars.length; i++) {
+                    pair = vars[i].split("=");
+                    if (pair[0] == variable) {
+                        return unescape(pair[1]);
+                    }
+                }
+            }
+
+            var activeTransport = getQueryVariable('transport') || 'auto';
+            var isJsonp = getQueryVariable('jsonp') === 'true';
+
+            var drawingPad = $.connection.MyHub;
+
+            // someone draw something
+            drawingPad.client.draw = function (value) {
+                $("#pad").drawingpad("line", value);
+            };
+
+            $.connection.hub.start({ transport: activeTransport }, function () {
+                drawingPad.server.join().done(function () {
+                    $("#connecting").hide();
+                    $("#connected").show();
+                    $("#connected1").show();
+
+                    color = drawingPad.state.color;
+
+                    // Listen for drawing
+                    $("#pad").drawingpad({ linecolor: color }).bind('line.drawingpad', function (event, args) {
+                        drawingPad.server.Draw(args);
+                    });
+                });
+            });
         });
     </script>
 </body>
