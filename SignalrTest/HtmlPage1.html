@@ -11,7 +11,7 @@
             border: 2px solid #808080;
         }
     </style>
-
+    <input type="hidden" id="userName" />
     <div style="padding:20px;display: none" id="connected1">
         这是:
         <input id="set" />
@@ -32,46 +32,57 @@
         </div>
     </div>
 
-    <script>
-        $(function () {
-            $("#setButton").click(function () {
-
-            });
-        });
-
-        $(function () {
-            $("#guessButton").click(function () {
-
-            });
-        });
-    </script>
-
     <script src="Scripts/jquery-1.8.3.min.js"></script>
     <script src="Scripts/jquery.cookie.js"></script>
     <script src="Scripts/jquery.signalR-2.2.2.min.js"></script>
     <script src="Scripts/jcanvas.js"></script>
     <script src="Scripts/drawingpad.js"></script>
     <script src="signalr/js"></script>
+
+    <!--Buttons-->
     <script type="text/javascript">
+        var userName = prompt('请输入名字：', '');
+        $.cookie('userName', userName);
+
         var conn = $.connection("/my-connection");
 
         conn.start().done(function (data) {
-            console.log("当前clientID=" + data.id);
-            conn.send({ type: 2, value: "123" });
+            $.cookie('user', data.id);
+        });
+        
+        conn.received(function (data) {
+            if (data.type == "Set") {
+                var ret = "设置成功！";
+                if (data.fromClient != $.cookie('user')) {
+                    ret = data.fromUser + ret;
+                }
+                alert(ret);
+            }
+            else if (data.type == "Guess") {
+                var ret = "回答";
+                if (data.fromClient != $.cookie('user')) {
+                    ret = data.fromUser + ret;
+                }
+                
+                ret += data.correct + "！";
+                alert(ret);
+            }
         });
 
-        //接受服务器的推送
-        conn.received(function (data) {
-            console.log("server返回的数据： " + data);
+        $(function () {
+            $("#setButton").click(function () {
+                conn.send({ type: 0, value: $('#set').val() });
+            });
         });
-        conn.received(function (data) {
-            $("<li/>").html(window.JSON.stringify(data)).appendTo($("#messages"));
-            if (data.type == 2) {
-                $.cookie('user', data.data);
-            }
+
+        $(function () {
+            $("#guessButton").click(function () {
+                conn.send({ type: 1, value: $('#guess').val() });
+            });
         });
     </script>
 
+    <!--画板-->
     <script>
         $(function () {
             function getQueryVariable(variable) {

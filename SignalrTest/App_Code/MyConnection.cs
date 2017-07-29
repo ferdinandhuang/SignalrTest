@@ -11,8 +11,19 @@ namespace SignalrTest.App_Code
     {
         private static readonly ConcurrentDictionary<string, string> _users = new ConcurrentDictionary<string, string>();
         private static readonly ConcurrentDictionary<string, string> _clients = new ConcurrentDictionary<string, string>();
+        private static readonly ConcurrentDictionary<string, string> _guess = new ConcurrentDictionary<string, string>();
         protected override Task OnConnected(IRequest request, string connectionId)
         {
+            Cookie userNameCookie;
+            if (request.Cookies.TryGetValue("userName", out userNameCookie) &&
+                userNameCookie != null)
+            {
+                _clients[connectionId] = userNameCookie.Value;
+                _users[userNameCookie.Value] = connectionId;
+            }
+
+            string user = GetUser(connectionId);
+
             return Connection.Send(connectionId, "Welcome!");
         }
 
@@ -23,11 +34,23 @@ namespace SignalrTest.App_Code
             switch (message.Type)
             {
                 case MessageType.Set:
+                    _guess.AddOrUpdate(connectionId, message.Value, (key, oldValue) => oldValue = message.Value);
                     Connection.Broadcast(new
                     {
-                        type = MessageType.Set.ToString(),
-                        from = GetUser(connectionId),
-                        data = message.Value
+                        type = message.Type.ToString(),
+                        fromUser = GetUser(connectionId),
+                        fromClient = connectionId
+                    });
+                    break;
+                case MessageType.Guess:
+                    string answer = GetAnswer(connectionId);
+                    Connection.Broadcast(new
+                    {
+                        type = message.Type.ToString(),
+                        fromUser = GetUser(connectionId),
+                        fromClient = connectionId,
+                        data = message.Value,
+                        correct = (message.Value == answer) ? "正确" : "错误"
                     });
                     break;
                 default:
@@ -54,7 +77,6 @@ namespace SignalrTest.App_Code
         /// </summary>
         enum MessageType
         {
-            SetName,
             Set,
             Guess
         }
@@ -77,21 +99,37 @@ namespace SignalrTest.App_Code
             }
             return null;
         }
+        private string GetAnswer(string connectionId)
+        {
+            string answer="";
+
+            foreach (var item in _guess)
+            {
+                if(item.Key!= connectionId)
+                {
+                    answer = item.Value;
+                    break;
+                }
+            }
+
+            return answer;
+        }
+
         class Message
         {
             public MessageType Type { get; set; }
             public string Value { get; set; }
         }
 
-        private static string GetClientIP(IRequest request)
-        {
-            return Get<string>(request.Environment, "server.RemoteIpAddress");
-        }
+        //private static string GetClientIP(IRequest request)
+        //{
+        //    return Get<string>(request.Environment, "server.RemoteIpAddress");
+        //}
 
-        private static T Get<T>(IDictionary<string, object> env, string key)
-        {
-            object value;
-            return env.TryGetValue(key, out value) ? (T)value : default(T);
-        }
+        //private static T Get<T>(IDictionary<string, object> env, string key)
+        //{
+        //    object value;
+        //    return env.TryGetValue(key, out value) ? (T)value : default(T);
+        //}
     }
 }
